@@ -1,0 +1,35 @@
+@inject IterationPlanner.UiLanguage Language
+@using System.Globalization
+<div class="persian-picker">
+<button type="button" class="form-control date-trigger" @onclick="Toggle" aria-expanded="@open"><span>@(string.IsNullOrWhiteSpace(Value)?Language.Text("انتخاب تاریخ شمسی"):Value)</span><span aria-hidden="true">▦</span></button>
+@if(open){
+<div class="calendar-panel" role="group" aria-label="انتخاب تاریخ شمسی">
+<div class="calendar-toolbar"><button type="button" class="btn btn-sm btn-light" @onclick="Previous" aria-label="ماه قبل">→</button><select class="form-select" aria-label="ماه" @bind="month">@for(int m=1;m<=12;m++){<option value="@m">@months[m-1]</option>}</select><input class="form-control" type="number" min="1" max="9376" aria-label="سال شمسی" @bind="year" /><button type="button" class="btn btn-sm btn-light" @onclick="Next" aria-label="ماه بعد">←</button></div>
+<div class="calendar-grid">
+@foreach(var day in weekdays){<span class="calendar-weekday">@day</span>}
+@for(int blank=0;blank<Offset;blank++){<span></span>}
+@for(int d=1;d<=Days;d++){var chosen=d;var date=$"{year:0000}/{month:00}/{d:00}";<button type="button" class="calendar-day @(Value==date?"selected":"")" @onclick="()=>Choose(chosen)" aria-label="@date" aria-pressed="@(Value==date)">@d</button>}
+</div>
+<div class="calendar-footer"><button type="button" class="btn btn-sm btn-outline-primary" @onclick="Today">@Language.Text("امروز")</button>@if(Optional){<button type="button" class="btn btn-sm btn-light" @onclick="Clear">@Language.Text("بدون تاریخ پایان")</button>}<button type="button" class="btn btn-sm btn-light" @onclick="Toggle">@Language.Text("بستن")</button></div>
+</div>
+}
+</div>
+@code {
+[Parameter] public string Value {get;set;}="";
+[Parameter] public EventCallback<string> ValueChanged {get;set;}
+[Parameter] public bool Optional {get;set;}
+bool open;int year=1405,month=1;
+PersianCalendar calendar=new();
+string[] months=["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
+string[] weekdays=["ش","ی","د","س","چ","پ","ج"];
+int SafeYear=>Math.Clamp(year,1,9376);
+int Days=>calendar.GetDaysInMonth(SafeYear,month);
+int Offset=>((int)calendar.GetDayOfWeek(calendar.ToDateTime(SafeYear,month,1,0,0,0,0))+1)%7;
+void Toggle(){if(!open){try{var date=string.IsNullOrWhiteSpace(Value)?DateTime.Today:IterationPlanner.Planner.Parse(Value).ToDateTime(TimeOnly.MinValue);year=calendar.GetYear(date);month=calendar.GetMonth(date);}catch{year=calendar.GetYear(DateTime.Today);month=calendar.GetMonth(DateTime.Today);}}open=!open;}
+void Previous(){year=SafeYear;if(month>1)month--;else if(year>1){year--;month=12;}}
+void Next(){year=SafeYear;if(month<12)month++;else if(year<9376){year++;month=1;}}
+async Task Choose(int day){year=SafeYear;await ValueChanged.InvokeAsync($"{year:0000}/{month:00}/{day:00}");open=false;}
+async Task Today(){var today=DateTime.Today;year=calendar.GetYear(today);month=calendar.GetMonth(today);await Choose(calendar.GetDayOfMonth(today));}
+async Task Clear(){await ValueChanged.InvokeAsync("");open=false;}
+}
+

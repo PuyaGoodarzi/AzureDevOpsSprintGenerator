@@ -1,0 +1,11 @@
+<ul class="iteration-tree">
+@foreach(var group in Paths.Where(p=>p.Length>Depth).GroupBy(p=>p[Depth])){
+<li><span class="tree-node">@(group.Any(p=>p.Length>Depth+1)?"▾":"•") @group.Key</span>
+@if(group.Any(p=>p.Length>Depth+1)){<IterationTree Paths="@group.ToArray()" Depth="@(Depth+1)" />}
+</li>
+}
+</ul>
+@code{
+[Parameter]public string[][] Paths{get;set;}=[];
+[Parameter]public int Depth{get;set;}
+}

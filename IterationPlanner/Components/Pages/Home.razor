@@ -1,0 +1,89 @@
+@inject IterationPlanner.UiLanguage Language
+@page "/"
+@rendermode InteractiveServer
+@using IterationPlanner
+@inject AzureProjectsClient AzureProjects
+@inject AzureIterationsClient AzureIterations
+<PageTitle>IterationPlanner</PageTitle>
+<div dir="@(Language.English?"ltr":"rtl")" lang="@(Language.English?"en":"fa")" class="planner"><button class="btn btn-outline-primary mb-3" @onclick="SwitchLanguage">@(Language.English?"فارسی":"English")</button><div class="page-heading"><span class="eyebrow">@Language.Text("برنامه‌ریزی چابک · تقویم شمسی")</span>
+<h1>@Language.Text("برنامه‌ریز اسپرینت")</h1>
+<p>@Language.Text("تولید و بررسی محلی برنامه اسپرینت — تاریخ‌ها با قالب 1405/08/13")</p>
+</div><section class="card planner-card"><div class="section-heading"><span class="step">01</span><div><h2>@Language.Text("آهنگ اسپرینت")</h2><p>@Language.Text("قواعد تکرار و نام‌گذاری برنامه را مشخص کنید.")</p></div></div><div class="field-grid">
+<label>@Language.Text("روز شروع") <select class="form-select" @bind="weekday">@foreach(var d in days){<option value="@d.Item1">@(Language.English?d.Item1.ToString():d.Item2)</option>}</select></label>
+<label>@Language.Text("مدت") <input class="form-control" type="number" @bind="length" min="1" /></label><select class="form-select" @bind="weeks"><option value="true">@Language.Text("هفته")</option><option value="false">@Language.Text("روز")</option></select>
+@if(!weeks && length%7!=0){<p class="alert alert-warning" role="alert">@Language.Text("روز شروع اسپرینت‌های بعدی تغییر خواهد کرد؛ روز ثابت حفظ نمی‌شود.")</p>}
+<div class="naming-panel">
+<div class="field-grid mb-3"><label>@(Language.English?"Sprint and grouping names":"زبان نام اسپرینت و گروه‌ها")<select class="form-select" @bind="englishNames" @bind:after="NamingModeChanged"><option value="false">فارسی</option><option value="true">English</option></select></label>
+<label>@(Language.English?"Schedule calendar":"تقویم برنامه")<select class="form-select" @bind="gregorian" @bind:after="NamingModeChanged"><option value="false">@(Language.English?"Persian (Solar Hijri)":"شمسی")</option><option value="true">@(Language.English?"Gregorian":"میلادی")</option></select></label></div>
+<p class="help-note">@(Language.English?"Calendar controls year, quarter, month and week grouping. Naming language controls generated text. Changes require a new preview; existing Azure iterations are preserved.":"تقویم، سال و فصل و ماه را تعیین می‌کند. زبان نام‌ها مستقل است. پس از تغییر دوباره پیش‌نمایش بزنید؛ ساختار قبلی Azure تغییر نمی‌کند.")</p>
+<label>@Language.Text("الگوهای آماده")
+<select class="form-select" value="@pattern" @onchange="ChoosePattern">
+<option value="">@Language.Text("انتخاب الگوی آماده…")</option>
+@foreach(var preset in (englishNames?englishPresets:namingPresets)){<option value="@preset">@preset</option>}
+</select></label>
+<label class="mt-3">@Language.Text("الگوی دلخواه")<input class="form-control" dir="auto" @bind="pattern" @bind:event="oninput" /></label>
+<div class="token-list mt-2"><span class="badge text-bg-light">@Language.Text("{n} شماره اسپرینت")</span> <span class="badge text-bg-light">@Language.Text("{week} اول، دوم، …")</span> <span class="badge text-bg-light">@Language.Text("{month} ماه شمسی")</span> <span class="badge text-bg-light">@Language.Text("{year} سال شمسی")</span></div>
+<small class="text-muted d-block mt-2">@Language.Text("هفته بر اساس روز شروع است: ۱–۷ اول، ۸–۱۴ دوم، ۱۵–۲۱ سوم، ۲۲–۲۸ چهارم، ۲۹–۳۱ پنجم. برای اسپرینت چند‌هفته‌ای، هفته شروع نمایش داده می‌شود.")</small>
+<div class="name-example mt-3"><small>@Language.Text("نمونه نام با تاریخ و شماره شروع فعلی")</small><b dir="auto">@NamingExample()</b></div>
+</div>
+</div></section><section class="card planner-card"><div class="section-heading"><span class="step">02</span><div><h2>@Language.Text("بازه تولید")</h2><p>@Language.Text("پروژه، نقطه شروع و تعداد اسپرینت‌های جدید")</p></div></div><div class="field-grid">
+<div><label>پروژه هدف
+@if(projects.Count>0){<select class="form-select" @bind="project"><option value="">@Language.Text("پروژه را انتخاب کنید")</option>@foreach(var p in projects){<option value="@p.Id">@p.Name</option>}</select>}
+else{<input class="form-control" @bind="project" />}
+</label><button class="btn btn-outline-primary mt-2" disabled="@loadingProjects" @onclick="LoadProjects">@(loadingProjects?Language.Text("در حال دریافت…"):Language.Text("دریافت پروژه‌ها از Azure"))</button>
+@if(projectMessage!=null){<p role="status" class="small mt-2">@Language.Text(projectMessage)</p>}</div><label>@Language.Text("ساختار درختی")<select class="form-select" @bind="hierarchy"><option value="Year">@Language.Text("سال / اسپرینت")</option><option value="YearSeason">@Language.Text("سال / فصل / اسپرینت")</option><option value="YearMonth">@Language.Text("سال / ماه / اسپرینت")</option><option value="YearSeasonMonth">@Language.Text("سال / فصل / ماه / اسپرینت")</option><option value="Custom">@Language.Text("شاخه دلخواه / اسپرینت")</option></select></label>
+<label>@Language.Text("شاخه بالادستی اختیاری")<input class="form-control" dir="ltr" @bind="branch" /><small class="text-muted">@Language.Text("خالی بگذارید تا سال مستقیماً زیر پروژه ساخته شود. سال را دوباره وارد نکنید.")</small></label>
+<div><label>@(gregorian?(Language.English?"Generate from (Gregorian)":"تولید از (میلادی)"):Language.Text("تولید از (شمسی)"))</label>@if(gregorian){<input class="form-control" type="date" @bind="GregorianFrom" />}else{<IterationPlanner.Components.PersianDatePicker @bind-Value="from" />}</div>
+<div><label>@(gregorian?(Language.English?"Generate through (optional, Gregorian)":"تولید تا (اختیاری، میلادی)"):Language.Text("تولید تا (اختیاری، شمسی)"))</label>@if(gregorian){<input class="form-control" type="date" @bind="GregorianThrough" />}else{<IterationPlanner.Components.PersianDatePicker @bind-Value="through" Optional="true" />}</div>
+<label>@Language.Text("تعداد جدید") <input class="form-control" type="number" @bind="count" /></label><label>@Language.Text("شماره شروع") <input class="form-control" type="number" @bind="number" /></label>
+</div><p class="help-note">@Language.Text("تاریخ تولید از، زودترین شروع مجاز است. تاریخ پایان هر اسپرینت شامل همان روز است. بازه پایانی با مدت کامل تولید می‌شود.")</p>
+</section><section class="card planner-card"><div class="section-heading"><span class="step">03</span><div><h2>@Language.Text("اسپرینت‌های Azure")</h2><p>@Language.Text("اسپرینت‌های قبلی به صورت فقط‌خواندنی بررسی می‌شوند.")</p></div></div>
+<button class="btn btn-outline-primary" disabled="@azureBusy" @onclick="LoadIterations">@Language.Text("بارگذاری اسپرینت‌های پروژه انتخابی")</button><p class="mt-2">@Language.Text("برای ادامه، شاخه هدف را انتخاب کنید. برای ساخت برنامه از صفر، تاریخ شروع را انتخاب کنید.")</p>
+<textarea class="form-control code-input" dir="ltr" @bind="existingJson" rows="5" style="width:100%"></textarea>
+<div class="action-bar"><button class="btn btn-outline-primary" @onclick="Continue">@Language.Text("ادامه پس از اسپرینت‌های موجود")</button>
+<button class="btn btn-primary" @onclick="Preview">@Language.Text("پیش‌نمایش")</button>
+</div><label class="check-label"><input class="form-check-input" type="checkbox" @bind="accept" @bind:after="Preview" /> @Language.Text("تاریخ تنظیم‌شده را می‌پذیرم")</label>
+</section>@if(information!=null){<p role="status" class="alert alert-info">@Language.Text(information)</p>}@if(error!=null){<p class="alert alert-warning" role="alert">@Language.Text(error)</p>}
+@if(window!=null){
+<p>شروع درخواستی: @Date(window.Requested) | شروع مؤثر: @Date(window.Effective) (@window.Effective.DayOfWeek) | مدت: @window.Duration روز | تعداد: @window.Items.Count | فاصله: @window.Gap روز</p>
+@if(window.NeedsAcceptance){<p class="alert alert-warning" role="alert">@Language.Text("شروع به روز انتخابی بعدی منتقل می‌شود؛ تاریخ را بپذیرید یا ورودی را اصلاح کنید.")</p>}
+@if(window.Gap>0){<label><input type="checkbox" @bind="gapAccepted" /> @Language.Text("فاصله را بررسی کردم و می‌پذیرم")</label>}
+<section class="card planner-card"><h2>@Language.Text("ساختار پیشنهادی در Azure")</h2><p>@projects.FirstOrDefault(p=>p.Id==project)?.Name</p><p>@(gregorian?"Gregorian year / quarter / month grouping. Parents have no dates. Existing iterations are preserved.":Language.Text("فصل‌های Q1 تا Q4 بر اساس سال شمسی هستند. ماه و سال از شروع اسپرینت تعیین می‌شوند؛ والدها بدون تاریخ ساخته می‌شوند. اسپرینت‌های قبلی جابه‌جا نمی‌شوند."))</p><IterationPlanner.Components.IterationTree Paths="@window.Items.Select(x=>x.Sprint.Path.Split((char)47)).ToArray()" /></section><div class="table-responsive card"><table class="table table-hover align-middle mb-0"><thead><tr><th>@Language.Text("نوع")</th><th>@Language.Text("پروژه / مسیر")</th><th>@Language.Text("شروع شمسی / میلادی")</th><th>@Language.Text("پایان شمسی / میلادی")</th><th>@Language.Text("وضعیت")</th></tr></thead><tbody>
+@foreach(var s in Planner.Relevant(existing,project,branch)){<tr><td>@Language.Text("موجود")</td><td dir="ltr">@s.Project / @s.Path</td><td>@Date(s.Start)</td><td>@Date(s.Finish)</td><td>@Language.Text("فقط خواندنی")</td></tr>}
+@foreach(var p in window.Items){<tr><td>@Language.Text("پیشنهاد")</td><td dir="ltr">@p.Sprint.Project / @p.Sprint.Path</td><td>@Date(p.Sprint.Start)</td><td>@Date(p.Sprint.Finish)</td><td>@p.Status @Language.Text(p.Detail)</td></tr>}
+</tbody></table></div>
+<h2 class="mt-4">@Language.Text("خروجی پیش‌نمایش")</h2><div class="card planner-card mt-3"><h2>@Language.Text("انتشار در Azure")</h2><p>پروژه: @projects.FirstOrDefault(p=>p.Id==project)?.Name — فقط ایجاد گره‌های جدید؛ اسپرینت‌های قبلی تغییر نمی‌کنند. انتخاب برای تیم، مرحله‌ای جداگانه است.</p><label class="check-label"><input type="checkbox" @bind="publishApproved" /> @Language.Text("ایجاد برنامه پیش‌نمایش در این پروژه را تأیید می‌کنم")</label><button class="btn btn-primary mt-3" disabled="@(azureBusy || !publishApproved)" @onclick="PublishAzure">@Language.Text("ایجاد اسپرینت‌ها در Azure")</button>@foreach(var line in execution){<p dir="auto">@Language.Text(line)</p>}</div><textarea class="form-control code-input" dir="ltr" rows="8" style="width:100%" readonly>@System.Text.Json.JsonSerializer.Serialize(new {schemaVersion=1,window},new System.Text.Json.JsonSerializerOptions{WriteIndented=true})</textarea>
+}
+</div>
+@code {
+bool englishNames,gregorian;
+string[] englishPresets=["Sprint {n} - Week {week} of {month}","Week {week} of {month} - Sprint {n}","Sprint {n} - {month} {year}","{year} {month} - Sprint {n}","Sprint {n}"];
+void NamingModeChanged(){pattern=englishNames?englishPresets[0]:namingPresets[0];window=null;publishApproved=false;}
+DateTime GregorianFrom{get=>Planner.Parse(from).ToDateTime(TimeOnly.MinValue);set=>from=Planner.Persian(DateOnly.FromDateTime(value));}
+DateTime? GregorianThrough{get=>string.IsNullOrWhiteSpace(through)?null:Planner.Parse(through).ToDateTime(TimeOnly.MinValue);set=>through=value.HasValue?Planner.Persian(DateOnly.FromDateTime(value.Value)):"";}
+void SwitchLanguage()=>Language.Toggle();
+List<IterationNode> azureNodes=[];string? loadedProject;bool azureBusy,publishApproved;List<string> execution=[];
+async Task LoadIterations(){azureBusy=true;error=null;window=null;publishApproved=false;try{if(!projects.Any(p=>p.Id==project))throw new InvalidOperationException("ابتدا پروژه هدف را از فهرست انتخاب کنید.");azureNodes=await AzureIterations.Load(project);loadedProject=project;existing=AzureIterationsClient.Leaves(project,azureNodes);existingJson=System.Text.Json.JsonSerializer.Serialize(existing);information=existing.Length==0?"اتصال موفق بود. هنوز اسپرینت تاریخ‌داری در این پروژه نیست؛ تاریخ شروع را انتخاب و برنامه جدید بسازید.":$"{existing.Length} اسپرینت تاریخ‌دار و {azureNodes.Count(n=>n.HasChildren)} گروه دریافت شد.";}catch{loadedProject=null;error="بارگذاری اسپرینت‌ها ناموفق بود؛ دسترسی، شبکه و تنظیمات Azure را بررسی کنید.";}finally{azureBusy=false;}}
+async Task PublishAzure(){error=null;azureBusy=true;try{if(window==null||!publishApproved||loadedProject!=project)throw new InvalidOperationException("پروژه را بارگذاری و پیش‌نمایش را دوباره بررسی کنید.");if(window.Gap>0&&!gapAccepted)throw new InvalidOperationException("فاصله برنامه را تأیید کنید.");execution=await AzureIterations.Publish(project,window,azureNodes);publishApproved=false;}catch(InvalidOperationException e){error=e.Message;}catch{error="انتشار ناموفق بود؛ وضعیت Azure را دوباره بارگذاری کنید.";}finally{azureBusy=false;}}
+List<AzureProject> projects=[];bool loadingProjects;string? projectMessage;
+async Task LoadProjects(){loadingProjects=true;projectMessage=null;try{projects=await AzureProjects.ListAsync();project="";window=null;projectMessage=projects.Count==0?"پروژه قابل دسترسی یافت نشد.":$"{projects.Count} پروژه دریافت شد؛ پروژه هدف را انتخاب کنید.";}catch(InvalidOperationException e){projectMessage=e.Message;}catch(OperationCanceledException){projectMessage="مهلت اتصال تمام شد؛ شبکه و آدرس سرور را بررسی کنید.";}catch{projectMessage="اتصال ناموفق بود؛ شبکه، گواهی سرور و تنظیمات اتصال را بررسی کنید.";}finally{loadingProjects=false;}}
+string hierarchy="YearSeasonMonth";string? information;
+string[] namingPresets=["Sprint {n} - هفته {week} {month}","هفته {week} {month} - Sprint {n}","اسپرینت {n} - هفته {week} {month}","{month} {year} - Sprint {n}","Sprint {n} - {month} {year}","اسپرینت {n} - {month}","Sprint {n}"];
+void ChoosePattern(ChangeEventArgs e){var selected=e.Value?.ToString();if(!string.IsNullOrWhiteSpace(selected))pattern=selected;}
+string NamingExample(){try{return Planner.RenderName(pattern,Planner.Align(Planner.Parse(from),weekday),number,englishNames,gregorian);}catch{return "برای نمایش نمونه، تاریخ شروع معتبر وارد کنید.";}}
+DayOfWeek weekday=DayOfWeek.Saturday; int length=2,count=6,number=1;bool weeks=true,accept,gapAccepted;string project="Project",branch="",from="1405/08/16",through="",pattern="Sprint {n}",existingJson="[]";string? error;Window? window;Sprint[] existing=[];
+(DayOfWeek,string)[] days=[(DayOfWeek.Saturday,"شنبه"),(DayOfWeek.Sunday,"یکشنبه"),(DayOfWeek.Monday,"دوشنبه"),(DayOfWeek.Tuesday,"سه‌شنبه"),(DayOfWeek.Wednesday,"چهارشنبه"),(DayOfWeek.Thursday,"پنجشنبه"),(DayOfWeek.Friday,"جمعه")];
+string Date(DateOnly d)=>Planner.Persian(d)+" / "+d.ToString("yyyy-MM-dd");
+void Load()=>existing=System.Text.Json.JsonSerializer.Deserialize<Sprint[]>(existingJson)??[];
+void Continue(){try{Load();var relevant=Planner.Relevant(existing,project,branch);if(relevant.Length==0){information="برای ادامه، اسپرینت قبلی در این شاخه نداریم. این مانع ساخت نیست؛ تاریخ شروع را انتخاب کنید و پیش‌نمایش بزنید. اگر قبلاً ساخته‌اید، ابتدا بارگذاری اسپرینت‌ها را بزنید.";error=null;return;}from=Planner.Persian(Planner.Continue(relevant));number=Planner.Suggest(relevant);accept=false;Preview();}catch(Exception e){error=e.Message;}}
+void Preview(){try{error=null;publishApproved=false;gapAccepted=false;Load();window=Planner.Generate(project,branch,Planner.Parse(from),weekday,weeks?checked(length*7):length,count,number,pattern,existing,accept,string.IsNullOrWhiteSpace(through)?null:Planner.Parse(through),hierarchy,englishNames,gregorian);}catch(Exception e){window=null;error="ورودی را بررسی کنید: "+e.Message;}}
+}
+
+
+
+
+
+
+
+
+

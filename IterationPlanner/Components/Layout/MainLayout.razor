@@ -1,0 +1,24 @@
+@inject IterationPlanner.UiLanguage Language
+@inherits LayoutComponentBase
+@implements IDisposable
+<div class="app-shell" dir="@(Language.English?"ltr":"rtl")">
+    <aside class="app-sidebar">
+        <a href="/" class="brand"><span class="brand-mark">IP</span><span>IterationPlanner<span class="brand-subtitle">Iteration Planner</span></span></a>
+        <div class="nav-caption">@Language.Text("فضای برنامه‌ریزی")</div>
+        <a class="sidebar-link active" href="/">▦ <span>@Language.Text("تولید و پیش‌نمایش")</span></a>
+        <div class="sidebar-note"><span class="status-dot"></span> @Language.Text("حالت پیش‌نمایش محلی")<p>@Language.Text("برنامه را بسازید و پیش از انتشار، تاریخ‌ها و تداخل‌ها را بررسی کنید.")</p></div>
+        <div class="sidebar-footer">ITERATIONPLANNER · ITERATION PLANNER</div>
+    </aside>
+    <main class="app-main">
+        <header class="app-header"><span>@Language.Text("مدیریت برنامه اسپرینت‌ها")</span><span class="badge rounded-pill local-badge">@Language.Text("پیش‌نمایش محلی")</span></header>
+        <article class="app-content">@Body</article>
+    </main>
+</div>
+<div id="blazor-error-ui" data-nosnippet>خطایی رخ داد. <a href="." class="reload">بارگذاری مجدد</a><span class="dismiss">×</span></div>
+
+@code {
+protected override void OnInitialized()=>Language.Changed+=Refresh;
+void Refresh()=>InvokeAsync(StateHasChanged);
+public void Dispose()=>Language.Changed-=Refresh;
+}
+
